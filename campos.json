@@ -27,7 +27,7 @@
     },
     {
       "nombre": "temporada",
-      "etiqueta": "Temporada / tipo de outfit",
+      "etiqueta": "temporada / tipo de outfit",
       "tipo": "lista",
       "requerido": true,
       "opciones": [
@@ -38,7 +38,11 @@
         "Playera",
         "HoodieDelgadita",
         "Camiseta",
-        "Guayaberas"
+        "Guayaberas",
+        "Disfraz",
+        "Chamarra",
+        "Batas",
+        "Blazer"
       ]
     }
   ]

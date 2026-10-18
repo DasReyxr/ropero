@@ -10,9 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qs
 
 import campos
-
-
-from constantes import EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC
+from constantes import EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC, WEB
 from db import asegurar_columna, cargar_prenda, db_a_json, open_db, prenda_a_dict
 from utils import (
     UploadedFile,
@@ -67,6 +65,8 @@ class RoperoHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/img/"):
             return self.serve_image(path.removeprefix("/img/"))
+        if path.startswith("/static/"):
+            return self.serve_static(path.removeprefix("/static/"))
         if path in {"/", "/ui", "/batch"}:
             return self._send_frontend()
         if path == "/api/config":
@@ -99,6 +99,16 @@ class RoperoHandler(BaseHTTPRequestHandler):
             content_type = "image/png"
         elif suffix == ".webp":
             content_type = "image/webp"
+        self._send_bytes(path.read_bytes(), content_type=content_type)
+
+    def serve_static(self, rel_name: str):
+        """Sirve solo .css y .js que estén directamente en web/."""
+        nombre = Path(rel_name).name
+        tipos = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
+        content_type = tipos.get(Path(nombre).suffix.lower())
+        path = WEB / nombre
+        if not nombre or content_type is None or not path.is_file():
+            return self._send_404()
         self._send_bytes(path.read_bytes(), content_type=content_type)
 
     # --- POST ------------------------------------------------------------
