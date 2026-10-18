@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import unicodedata
 
 from constantes import CONFIG_INICIAL, CONFIG_PATH, NOMBRE_VALIDO, RESERVADOS
 
@@ -47,9 +49,41 @@ def cargar_config() -> dict:
 
 CFG = cargar_config()
 
+# Serializa las ediciones de opciones (el servidor usa un hilo por petición).
+LOCK = threading.RLock()
+
 
 def config_a_dict() -> dict:
     return {"campos": CFG["campos"]}
+
+
+def normalizar(texto: str) -> str:
+    """Clave de comparación: sin acentos, sin mayúsculas, sin espacios en los extremos."""
+    sin_acentos = unicodedata.normalize("NFKD", texto.strip())
+    return "".join(c for c in sin_acentos if not unicodedata.combining(c)).casefold()
+
+
+def campo_lista(nombre: str) -> dict | None:
+    for campo in CFG["campos"]:
+        if campo["nombre"] == nombre and campo.get("tipo") == "lista":
+            return campo
+    return None
+
+
+def opcion_existente(campo: dict, valor: str, excepto: str | None = None) -> str | None:
+    """Devuelve la opción del campo equivalente a `valor` (ignorando acentos/mayúsculas)."""
+    clave = normalizar(valor)
+    for opcion in campo.get("opciones", []):
+        if opcion != excepto and normalizar(opcion) == clave:
+            return opcion
+    return None
+
+
+def guardar_opciones(campo: dict, nuevas: list[str]) -> None:
+    """Guarda campos.json con las opciones nuevas y, solo si se escribió, muta `campo` en sitio."""
+    copia = {**CFG, "campos": [{**c, "opciones": nuevas} if c is campo else c for c in CFG["campos"]]}
+    guardar_config(copia)
+    campo["opciones"][:] = nuevas
 
 
 def canonical(campo: dict, valor: str) -> str:

@@ -10,8 +10,17 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qs
 
 import campos
-from constantes import EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC, WEB
-from db import asegurar_columna, cargar_prenda, db_a_json, open_db, prenda_a_dict
+from constantes import CAMPOS_PATH, EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC, WEB
+from db import (
+    asegurar_columna,
+    cargar_prenda,
+    contar_por_valor,
+    contar_prendas_con,
+    db_a_json,
+    open_db,
+    prenda_a_dict,
+    reasignar_valor,
+)
 from utils import (
     UploadedFile,
     extraer_filtros,
@@ -45,10 +54,10 @@ class RoperoHandler(BaseHTTPRequestHandler):
         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
         self._send_bytes(data, status=status, content_type="application/json; charset=utf-8")
 
-    def _send_frontend(self):
-        if not FRONTEND_PATH.exists():
+    def _send_frontend(self, ruta: Path = FRONTEND_PATH):
+        if not ruta.exists():
             return self._send_404()
-        self._send_bytes(FRONTEND_PATH.read_bytes(), content_type="text/html; charset=utf-8")
+        self._send_bytes(ruta.read_bytes(), content_type="text/html; charset=utf-8")
 
     def _redirect(self, location: str):
         self.send_response(HTTPStatus.SEE_OTHER)
@@ -69,6 +78,10 @@ class RoperoHandler(BaseHTTPRequestHandler):
             return self.serve_static(path.removeprefix("/static/"))
         if path in {"/", "/ui", "/batch"}:
             return self._send_frontend()
+        if path == "/campos":
+            return self._send_frontend(CAMPOS_PATH)
+        if path == "/api/campos/opciones":
+            return self.list_field_options(parsed.query)
         if path == "/api/config":
             return self._send_json(campos.config_a_dict())
         if path == "/api/prendas":
@@ -124,6 +137,12 @@ class RoperoHandler(BaseHTTPRequestHandler):
             return self.create_field()
         if parsed.path == "/field/option":
             return self.add_field_option()
+        if parsed.path == "/field/option/rename":
+            return self.move_field_option(exigir_existente=False)
+        if parsed.path == "/field/option/merge":
+            return self.move_field_option(exigir_existente=True)
+        if parsed.path == "/field/option/delete":
+            return self.delete_field_option()
         return self._send_404()
 
     def save_record(self):
@@ -267,15 +286,96 @@ class RoperoHandler(BaseHTTPRequestHandler):
                 continue
             if campo.get("tipo") != "lista":
                 return self._send_json({"ok": False, "error": "El campo no es una lista."}, status=HTTPStatus.BAD_REQUEST)
-            if opcion not in campo["opciones"]:
-                campo["opciones"].append(opcion)
+            with campos.LOCK:
+                existente = campos.opcion_existente(campo, opcion)
+                if existente:
+                    return self._send_json({"ok": False, "error": f"Ya existe «{existente}»."}, status=HTTPStatus.CONFLICT)
                 try:
-                    campos.guardar_config(campos.CFG)
+                    campos.guardar_opciones(campo, [*campo["opciones"], opcion])
                 except OSError as exc:
                     return self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return self._send_json({"ok": True, "campo": campo_nombre, "opcion": opcion})
 
         return self._send_json({"ok": False, "error": "Campo no encontrado."}, status=HTTPStatus.NOT_FOUND)
+
+    def list_field_options(self, query: str):
+        nombre = parse_qs(query).get("campo", [""])[0].strip()
+        campo = campos.campo_lista(nombre)
+        if campo is None:
+            return self._send_json({"error": "Campo no encontrado."}, status=HTTPStatus.NOT_FOUND)
+        with open_db() as db:
+            conteos = contar_por_valor(db, nombre)
+        por_clave: dict[str, int] = {}
+        for valor, n in conteos.items():
+            if isinstance(valor, str):
+                clave = campos.normalizar(valor)
+                por_clave[clave] = por_clave.get(clave, 0) + n
+        opciones = [{"valor": o, "prendas": por_clave.get(campos.normalizar(o), 0)} for o in campo["opciones"]]
+        return self._send_json({"campo": nombre, "etiqueta": campo["etiqueta"], "opciones": opciones})
+
+    def move_field_option(self, exigir_existente: bool):
+        """Renombrar (nuevo nombre) o fusionar (destino existente). Si el nombre nuevo ya existe,
+        renombrar se convierte en fusión: las prendas pasan a la opción existente."""
+        form = read_form(self)
+        nombre = form_value(form, "campo").strip()
+        origen = form_value(form, "origen").strip()
+        destino = form_value(form, "destino" if exigir_existente else "nuevo").strip()
+
+        def error(texto: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST):
+            return self._send_json({"ok": False, "error": texto}, status=status)
+
+        with campos.LOCK:
+            campo = campos.campo_lista(nombre)
+            if campo is None:
+                return error("Campo no encontrado.", HTTPStatus.NOT_FOUND)
+            if origen not in campo["opciones"]:
+                return error("La opción ya no existe.", HTTPStatus.NOT_FOUND)
+            if not destino:
+                return error("Falta el nombre de destino.")
+            if destino == origen:
+                return error("El nombre no cambió.")
+            existente = campos.opcion_existente(campo, destino, excepto=origen)
+            if exigir_existente and existente is None:
+                return error("El destino debe ser una opción existente.")
+
+            fusion = existente is not None
+            final = existente or destino
+            if fusion:
+                nuevas = [o for o in campo["opciones"] if o != origen]
+            else:
+                nuevas = [final if o == origen else o for o in campo["opciones"]]
+            try:
+                with open_db() as db:
+                    movidas = reasignar_valor(db, nombre, origen, final)
+                    # Si guardar falla, open_db no hace commit y la base queda intacta.
+                    campos.guardar_opciones(campo, nuevas)
+            except (sqlite3.Error, OSError) as exc:
+                return error(f"No se pudo guardar: {exc}", HTTPStatus.INTERNAL_SERVER_ERROR)
+        return self._send_json({"ok": True, "fusion": fusion, "movidas": movidas, "origen": origen, "destino": final})
+
+    def delete_field_option(self):
+        form = read_form(self)
+        nombre = form_value(form, "campo").strip()
+        origen = form_value(form, "origen").strip()
+
+        def error(texto: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST):
+            return self._send_json({"ok": False, "error": texto}, status=status)
+
+        with campos.LOCK:
+            campo = campos.campo_lista(nombre)
+            if campo is None:
+                return error("Campo no encontrado.", HTTPStatus.NOT_FOUND)
+            if origen not in campo["opciones"]:
+                return error("La opción ya no existe.", HTTPStatus.NOT_FOUND)
+            try:
+                with open_db() as db:
+                    n = contar_prendas_con(db, nombre, origen)
+                    if n:
+                        return error(f"«{origen}» tiene {n} prendas. Reasígnalas o fusiona primero.", HTTPStatus.CONFLICT)
+                    campos.guardar_opciones(campo, [o for o in campo["opciones"] if o != origen])
+            except (sqlite3.Error, OSError) as exc:
+                return error(f"No se pudo guardar: {exc}", HTTPStatus.INTERNAL_SERVER_ERROR)
+        return self._send_json({"ok": True, "origen": origen})
 
     def save_batch(self):
         form = read_form(self)

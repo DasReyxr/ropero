@@ -50,7 +50,7 @@ CONFIG_INICIAL = {
         },
         {
             "nombre": "temporada",
-            "etiqueta": "temporada / tipo de outfit",
+            "etiqueta": "categoriaoutfit",
             "tipo": "lista",
             "requerido": True,
             "opciones": ["Hoodie", "Camisa", "Pantalon", "Chaqueta"],

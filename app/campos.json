@@ -20,14 +20,12 @@
         "azul",
         "azul marino",
         "morado",
-        "rosa",
-        "Cafe",
-        "blanca"
+        "rosa"
       ]
     },
     {
       "nombre": "temporada",
-      "etiqueta": "temporada / tipo de outfit",
+      "etiqueta": "categoriaoutfit",
       "tipo": "lista",
       "requerido": true,
       "opciones": [

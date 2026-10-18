@@ -6,7 +6,7 @@ import sqlite3
 from contextlib import contextmanager
 
 import campos
-from constantes import DB_PATH
+from constantes import DB_PATH, NOMBRE_VALIDO
 
 
 def asegurar_columna(db: sqlite3.Connection, nombre: str) -> None:
@@ -86,6 +86,40 @@ def prenda_a_dict(prenda) -> dict:
 def db_a_json(db: sqlite3.Connection, filtros: dict[str, str]):
     prendas = [prenda_a_dict(row) for row in listar_prendas(db, campos.CFG["campos"], filtros)]
     return {"prendas": prendas, "total": len(prendas)}
+
+
+def _columna(campo: str) -> str:
+    if not NOMBRE_VALIDO.match(campo):
+        raise ValueError(f"Nombre de campo inválido: {campo!r}")
+    return campo
+
+
+def contar_por_valor(db: sqlite3.Connection, campo: str) -> dict[str, int]:
+    col = _columna(campo)
+    filas = db.execute(f'SELECT "{col}" AS v, COUNT(*) AS n FROM prendas WHERE "{col}" IS NOT NULL GROUP BY "{col}"')
+    return {fila["v"]: fila["n"] for fila in filas}
+
+
+def _valores_equivalentes(db: sqlite3.Connection, campo: str, valor: str) -> list[str]:
+    clave = campos.normalizar(valor)
+    return [v for v in contar_por_valor(db, campo) if isinstance(v, str) and campos.normalizar(v) == clave]
+
+
+def contar_prendas_con(db: sqlite3.Connection, campo: str, valor: str) -> int:
+    conteos = contar_por_valor(db, campo)
+    return sum(conteos[v] for v in _valores_equivalentes(db, campo, valor))
+
+
+def reasignar_valor(db: sqlite3.Connection, campo: str, origen: str, destino: str) -> int:
+    """Pasa a `destino` todas las prendas con `origen` (y sus variantes de mayúsculas/acentos).
+    Sirve para renombrar y fusionar. No hace commit: lo hace open_db()."""
+    col = _columna(campo)
+    movidas = 0
+    for valor in _valores_equivalentes(db, campo, origen):
+        if valor == destino:
+            continue
+        movidas += db.execute(f'UPDATE prendas SET "{col}" = ? WHERE "{col}" = ?', (destino, valor)).rowcount
+    return movidas
 
 
 def valores_de_filtro(db: sqlite3.Connection, campo: dict):

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administrar campos · Ropero</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <style>
+    .opcion { border-top: 1px solid rgba(0,0,0,.12); padding: 12px 0; }
+    .opcion:first-child { border-top: 0; }
+    .fila { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .fila .nombre { font-weight: 600; flex: 1 1 140px; overflow-wrap: anywhere; }
+    .fila .conteo { color: #6b6559; min-width: 80px; }
+    .fila .acciones { display: flex; flex-wrap: wrap; gap: 6px; }
+    .panel-accion { margin-top: 10px; padding: 12px; border-radius: 12px; background: rgba(0,0,0,.04); }
+    .panel-accion .fila { margin-top: 8px; }
+    .btn[disabled] { opacity: .45; cursor: not-allowed; }
+    .aviso { min-height: 1.4em; margin: 0 0 12px; font-weight: 600; }
+    .aviso.error { color: #a3261a; }
+    .selector { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .selector .btn[aria-current="true"] { outline: 2px solid currentColor; outline-offset: 2px; }
+    .alta { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 16px 0; }
+    .alta > div { flex: 1 1 200px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="main-layout">
+      <aside class="sidebar">
+        <header class="brand">
+          <h1>Campos</h1>
+          <p>Administra las opciones de cada lista. Los cambios actualizan las prendas existentes.</p>
+          <div class="actions">
+            <a class="btn secondary" href="/">Volver al ropero</a>
+          </div>
+        </header>
+        <section class="panel">
+          <div class="inner">
+            <h2>Campo</h2>
+            <nav class="selector" id="selector" aria-label="Campos de tipo lista"></nav>
+          </div>
+        </section>
+      </aside>
+
+      <main class="panel">
+        <div class="inner">
+          <div class="section">
+            <h2 id="titulo">Opciones</h2>
+            <p class="muted">Renombrar a un nombre que ya existe fusiona las prendas en esa opción. Solo se puede eliminar una opción sin prendas.</p>
+          </div>
+          <p id="estado" class="aviso" role="status" aria-live="polite"></p>
+
+          <form id="alta" class="alta">
+            <div>
+              <label for="alta-nombre">Nueva opción</label>
+              <input id="alta-nombre" type="text" autocomplete="off" required>
+            </div>
+            <button class="btn primary" type="submit">Agregar</button>
+          </form>
+
+          <div id="lista"></div>
+          <div id="vacio" class="empty hidden">Este campo no tiene opciones todavía.</div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/static/campos.js"></script>
+</body>
+</html>
