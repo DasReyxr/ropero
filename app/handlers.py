@@ -7,9 +7,11 @@ import sqlite3
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urlparse, parse_qs
 
 import campos
+
+
 from constantes import EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC
 from db import asegurar_columna, cargar_prenda, db_a_json, open_db, prenda_a_dict
 from utils import (
@@ -138,24 +140,24 @@ class RoperoHandler(BaseHTTPRequestHandler):
         if not es_edicion and not tiene_upload:
             faltan.append("Foto")
         if faltan:
-            return self._redirect("/?" + urlencode({"error": "Faltan campos: " + ", ".join(faltan) + "."}))
+            return self._redirect_back(form, {"error": "Faltan campos: " + ", ".join(faltan) + "."})
 
         with open_db() as db:
             actual = cargar_prenda(db, int(record_id)) if es_edicion else None
             if es_edicion and actual is None:
-                return self._redirect("/?" + urlencode({"error": "La prenda ya no existe."}))
+                return self._redirect_back(form, {"error": "La prenda ya no existe."})
             repetido = db.execute(
                 "SELECT 1 FROM prendas WHERE identificador = ? AND id != ?" if es_edicion else "SELECT 1 FROM prendas WHERE identificador = ?",
                 (ident, int(record_id)) if es_edicion else (ident,),
             ).fetchone()
             if repetido:
-                return self._redirect("/?" + urlencode({"error": f"Ya existe una prenda llamada '{ident}'."}))
+                return self._redirect_back(form, {"error": f"Ya existe una prenda llamada '{ident}'."})
 
             if tiene_upload:
                 dest_name = safe_filename(ident, upload.filename)
                 destino = SRC / dest_name
                 if destino.exists() and (not actual or rel_photo(destino) != actual["foto"]):
-                    return self._redirect("/?" + urlencode({"error": f"Ya existe una foto con el nombre {dest_name}."}))
+                    return self._redirect_back(form, {"error": f"Ya existe una foto con el nombre {dest_name}."})
                 save_upload(upload, destino)
                 nueva_foto = rel_photo(destino)
                 if actual and actual["foto"] and actual["foto"] != nueva_foto:
@@ -173,7 +175,7 @@ class RoperoHandler(BaseHTTPRequestHandler):
                     nuevo_destino = SRC / nuevo_nombre
                     if nuevo_destino != actual_path:
                         if nuevo_destino.exists():
-                            return self._redirect("/?" + urlencode({"error": f"Ya existe una foto con el nombre {nuevo_nombre}."}))
+                            return self._redirect_back(form, {"error": f"Ya existe una foto con el nombre {nuevo_nombre}."})
                         if actual_path.exists():
                             actual_path.rename(nuevo_destino)
                         nueva_foto = rel_photo(nuevo_destino)
@@ -190,7 +192,7 @@ class RoperoHandler(BaseHTTPRequestHandler):
 
             campos.registrar_opciones_nuevas(db, valores)
 
-        self._redirect("/")
+        self._redirect_back(form)
 
     def delete_record(self):
         form = read_form(self)
@@ -321,3 +323,12 @@ class RoperoHandler(BaseHTTPRequestHandler):
         if errores:
             mensaje += f" {errores} archivos no se pudieron guardar."
         return self._redirect("/batch?" + urlencode({"msg": mensaje}))
+
+    def _redirect_back(self, form: dict[str, object], extra_params: dict[str, str] | None = None):
+            return_query = form_value(form, "return_query").strip()
+            params = parse_qs(return_query.lstrip("?"), keep_blank_values=True)
+            if extra_params:
+                for k, v in extra_params.items():
+                    params[k] = [v]
+            query_str = urlencode(params, doseq=True)
+            self._redirect("/" + (f"?{query_str}" if query_str else ""))
