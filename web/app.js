@@ -1,3 +1,19 @@
+const COLORES_CSS = {
+  'negro': '#111111', 'blanco': '#ffffff', 'gris': '#8a8a8a',
+  'gris claro': '#d0d0d0', 'gris oscuro': '#4a4a4a', 'plomo': '#6e6e73',
+  'rojo': '#c62828', 'vino': '#6d1b2b', 'guinda': '#6d1b2b', 'rosa': '#f4a6c0',
+  'rosa palo': '#f0c9c9', 'fucsia': '#d81b87', 'naranja': '#ef7d22',
+  'amarillo': '#f2cc2f', 'mostaza': '#c9a227', 'beige': '#d9c6a5',
+  'crema': '#f3ead3', 'cafe': '#6b4428', 'marron': '#6b4428', 'camel': '#b98550',
+  'khaki': '#b8a76a', 'verde': '#2e7d4f', 'verde oliva': '#6b7036',
+  'verde militar': '#4b5320', 'verde menta': '#a8dcc0', 'verde botella': '#0b3d2e',
+  'azul': '#1f5fbf', 'azul marino': '#14213d', 'azul cielo': '#8ec5ee',
+  'azul rey': '#1c3faa', 'celeste': '#9fd3f2', 'turquesa': '#20b2aa',
+  'morado': '#6a3d9a', 'lila': '#c4a7e0', 'lavanda': '#d8c8ee',
+  'dorado': '#d4af37', 'plateado': '#c0c0c0', 'mezclilla': '#4a6fa5',
+  'multicolor': 'linear-gradient(135deg,#e53935,#fdd835,#43a047,#1e88e5,#8e24aa)',
+};
+
 const state = { config: null, prendas: [], filters: {}, editId: null };
 const $ = (sel) => document.querySelector(sel);
 const escapeHtml = (value) => String(value ?? '')
@@ -65,26 +81,33 @@ async function loadPrendas() {
   $('#empty-state').classList.add('hidden');
   for (const prenda of state.prendas) grid.appendChild(renderCard(prenda));
 }
-
 function renderDynamicFilters() {
   const container = $('#dynamic-filters');
   container.innerHTML = '';
   for (const campo of state.config.campos) {
     const wrap = document.createElement('div');
     const label = document.createElement('label');
-    const control = document.createElement(campo.tipo === 'lista' ? 'select' : 'input');
     label.setAttribute('for', `filter-${campo.nombre}`);
     label.textContent = campo.etiqueta;
-    control.id = `filter-${campo.nombre}`;
-    control.name = campo.nombre;
-    if (campo.tipo === 'lista') {
-      control.innerHTML = `<option value="">Todos</option>${(campo.opciones || []).map(op => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join('')}`;
-    } else {
-      control.type = 'text';
-      control.placeholder = campo.etiqueta;
-    }
     wrap.appendChild(label);
-    wrap.appendChild(control);
+
+    let control;
+    if (campo.tipo === 'lista' && campo.nombre === 'color') {
+      const picker = buildColorPicker(campo, `filter-${campo.nombre}`, campo.nombre, true);
+      control = picker.campoInput;               // input hidden con id filter-color
+      wrap.appendChild(picker);
+    } else {
+      control = document.createElement(campo.tipo === 'lista' ? 'select' : 'input');
+      control.id = `filter-${campo.nombre}`;
+      control.name = campo.nombre;
+      if (campo.tipo === 'lista') {
+        control.innerHTML = `<option value="">Todos</option>${(campo.opciones || []).map(op => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join('')}`;
+      } else {
+        control.type = 'text';
+        control.placeholder = campo.etiqueta;
+      }
+      wrap.appendChild(control);
+    }
     container.appendChild(wrap);
     control.addEventListener('change', applyFilters);
     control.addEventListener('input', applyFilters);
@@ -112,12 +135,116 @@ function applyFilters(event) {
 
     state.filters = filters;
 
-    // Actualiza la URL del navegador en tiempo real sin recargar la página
     const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
     history.pushState(null, '', newUrl);
 
     loadPrendas();
 }
+
+//
+const normalizarTexto = (t) => String(t ?? '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+function cssDeColor(nombre) {
+  const n = normalizarTexto(nombre);
+  if (COLORES_CSS[n]) return COLORES_CSS[n];
+  // Aproximación por primera palabra ("verde lima" -> verde)
+  const primera = n.split(/\s+/)[0];
+  return COLORES_CSS[primera] || null;
+}
+
+
+function buildColorPicker(campo, fieldId, name, compacto = false) {
+  const root = document.createElement('div');
+  root.className = 'color-picker' + (compacto ? ' compacto' : '');
+
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.id = fieldId;
+  hidden.name = name;
+
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = 'Buscar color...';
+  search.autocomplete = 'off';
+
+  const status = document.createElement('div');
+  status.className = 'color-status hint';
+
+  const grid = document.createElement('div');
+  grid.className = 'color-grid';
+
+  const empty = document.createElement('div');
+  empty.className = 'color-empty hint hidden';
+  empty.textContent = 'Ningún color coincide.';
+
+  const celdas = [];
+  for (const op of (campo.opciones || [])) {
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.className = 'color-cell';
+    cell.dataset.valor = op;
+    cell.dataset.texto = normalizarTexto(op);
+    cell.title = op;
+    cell.setAttribute('aria-label', op);
+    const swatch = document.createElement('span');
+    swatch.className = 'color-swatch';
+    const css = cssDeColor(op);
+    if (css) swatch.style.background = css; else swatch.classList.add('sin-muestra');
+    cell.appendChild(swatch);
+    if (!compacto) {
+      const text = document.createElement('span');
+      text.className = 'color-name';
+      text.textContent = op;
+      cell.appendChild(text);
+    }
+    cell.addEventListener('click', () => {
+      hidden.value = hidden.value === op ? '' : op;   // clic otra vez = quitar
+      refresh();
+      hidden.dispatchEvent(new Event('change', { bubbles: true })); // para el filtro
+    });
+    grid.appendChild(cell);
+    celdas.push(cell);
+  }
+
+  function filtrar() {
+    const q = normalizarTexto(search.value);
+    let visibles = 0;
+    for (const c of celdas) {
+      const ok = !q || c.dataset.texto.includes(q);
+      c.classList.toggle('hidden', !ok);
+      if (ok) visibles++;
+    }
+    empty.classList.toggle('hidden', visibles > 0);
+  }
+
+  function refresh() {
+    for (const c of celdas) c.classList.toggle('selected', c.dataset.valor === hidden.value);
+    status.textContent = hidden.value
+      ? `Seleccionado: ${hidden.value}`
+      : (compacto ? 'Todos los colores' : 'Sin color seleccionado');
+    filtrar();
+  }
+
+  search.addEventListener('input', filtrar);
+  search.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const visibles = celdas.filter(c => !c.classList.contains('hidden'));
+    if (visibles.length === 1) visibles[0].click();
+  });
+
+  root.refresh = refresh;
+  root.campoInput = hidden;      // antes: root.hidden (propiedad nativa del DOM)
+  root.append(hidden, search, status, grid, empty);
+  refresh();
+  return root;
+}
+
+function refreshColorPickers() {
+  document.querySelectorAll('.color-picker').forEach(p => p.refresh());
+}
+//
 
 function renderFormFields(containerSelector, campos, prefix) {
   const container = document.querySelector(containerSelector);
@@ -130,7 +257,13 @@ function renderFormFields(containerSelector, campos, prefix) {
     label.setAttribute('for', fieldId);
     label.textContent = `${campo.etiqueta}${campo.requerido ? ' *' : ''}`;
     block.appendChild(label);
-    if (campo.tipo === 'lista') {
+    if (campo.tipo === 'lista' && campo.nombre === 'color') {
+      block.appendChild(buildColorPicker(
+        campo, fieldId,
+        prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`
+      ));
+    }
+    else if (campo.tipo === 'lista') {
       const select = document.createElement('select');
       select.id = fieldId;
       select.name = prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`;
@@ -183,6 +316,7 @@ async function openEditModal(prenda) {
     const el = document.querySelector(`#garment-${campo.nombre}`);
     if (el) el.value = prenda[campo.nombre] || '';
   }
+  refreshColorPickers();
   $('#garment-preview').src = prenda.foto ? `/img/${encodeURIComponent(prenda.foto.split('/').pop())}` : '';
   openDialog('garment-dialog');
 }
@@ -192,6 +326,8 @@ function openCreateModal() {
   $('#garment-title').textContent = 'Nueva prenda';
   $('#garment-subtitle').textContent = 'Crea una prenda nueva desde el popup.';
   $('#garment-form').reset();
+  document.querySelectorAll('#garment-fields .color-picker input[type="hidden"]').forEach(i => { i.value = ''; });
+  refreshColorPickers();
   $('#garment-record-id').value = '';
   $('#garment-current-photo').value = '';
   $('#garment-return-query').value = window.location.search; 
@@ -218,6 +354,7 @@ function initFiltersFromUrl() {
       }
     }
   }
+  refreshColorPickers();   // marca el color que venga en la URL
   state.filters = filters;
 }
 function deletePrenda(prenda) {
@@ -254,6 +391,8 @@ function wireModalPreviews() {
 $('#filters-form').addEventListener('submit', applyFilters);
 $('#clear-filters').addEventListener('click', () => {
   $('#filters-form').reset();
+  document.querySelectorAll('#dynamic-filters .color-picker input[type="hidden"]').forEach(i => { i.value = ''; });
+  refreshColorPickers();
   state.filters = {};
   loadPrendas();
 });
