@@ -1,0 +1,18 @@
+# Datos personales
+ropero.db-journal
+*.db-wal
+*.db-shm
+src/*
+!src/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
