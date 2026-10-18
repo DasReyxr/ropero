@@ -8,17 +8,15 @@
       "sugerir_color": true,
       "opciones": [
         "negro",
-        "blanco",
+        "Blanco",
         "gris",
-        "beige",
-        "café",
+        "Café",
         "rojo",
         "naranja",
         "amarillo",
         "verde",
         "turquesa",
         "azul",
-        "azul marino",
         "morado",
         "rosa"
       ]

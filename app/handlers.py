@@ -310,7 +310,7 @@ class RoperoHandler(BaseHTTPRequestHandler):
             if isinstance(valor, str):
                 clave = campos.normalizar(valor)
                 por_clave[clave] = por_clave.get(clave, 0) + n
-        opciones = [{"valor": o, "prendas": por_clave.get(campos.normalizar(o), 0)} for o in campo["opciones"]]
+        opciones = [{"valor": o, "prendas": por_clave.get(campos.normalizar(o), 0)} for o in campos.ordenar_opciones(campo["opciones"])]
         return self._send_json({"campo": nombre, "etiqueta": campo["etiqueta"], "opciones": opciones})
 
     def move_field_option(self, exigir_existente: bool):

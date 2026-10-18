@@ -46,36 +46,6 @@
   }
 
   // --- Paneles de acción por opción ---------------------------------------
-  function panelRenombrar(op) {
-    const input = el("input", { type: "text", value: op.valor, id: "renombrar-input" });
-    const pista = el("p", { className: "hint" });
-    const actualizar = () => {
-      const nuevo = input.value.trim();
-      const otra = estado.opciones.find((o) => o.valor !== op.valor && norm(o.valor) === norm(nuevo));
-      pista.textContent = otra
-        ? `«${otra.valor}» ya existe: se moverán ${plural(op.prendas)} a esa opción y «${op.valor}» desaparecerá.`
-        : "";
-    };
-    input.oninput = actualizar;
-    const guardar = () =>
-      ejecutar(
-        "/field/option/rename",
-        { campo: estado.campo, origen: op.valor, nuevo: input.value.trim() },
-        (j) => (j.fusion ? `«${j.origen}» se fusionó con «${j.destino}» (${plural(j.movidas)}).` : `Renombrada a «${j.destino}».`)
-      );
-    input.onkeydown = (ev) => ev.key === "Enter" && (ev.preventDefault(), guardar());
-    actualizar();
-    queueMicrotask(() => input.focus());
-    return el(
-      "div",
-      { className: "panel-accion" },
-      el("label", { htmlFor: "renombrar-input", textContent: "Nuevo nombre" }),
-      input,
-      pista,
-      el("div", { className: "fila" }, boton("Guardar", "primary", guardar), boton("Cancelar", "secondary", cerrarPanel))
-    );
-  }
-
   function panelFusionar(op) {
     const otras = estado.opciones.filter((o) => o.valor !== op.valor);
     const select = el("select", { id: "fusionar-select" }, ...otras.map((o) => el("option", { value: o.valor, textContent: o.valor })));
@@ -133,27 +103,55 @@
     $("#vacio").classList.toggle("hidden", estado.opciones.length > 0);
 
     estado.opciones.forEach((op) => {
-      const enUso = op.prendas > 0;
-      const acciones = el(
-        "div",
-        { className: "acciones" },
-        boton("Renombrar", "secondary", () => abrir(op.valor, "renombrar")),
-        boton("Fusionar", "secondary", () => abrir(op.valor, "fusionar"), { disabled: estado.opciones.length < 2 }),
-        boton("Eliminar", "danger", () => abrir(op.valor, "eliminar"), { disabled: enUso })
-      );
-      const fila = el(
-        "div",
-        { className: "fila" },
-        el("span", { className: "nombre", textContent: op.valor }),
-        el("span", { className: "conteo", textContent: plural(op.prendas) }),
-        acciones
-      );
-      const item = el("div", { className: "opcion" }, fila);
-      if (enUso) item.append(el("p", { className: "hint", textContent: "Para eliminarla, fusiónala con otra opción o reasigna sus prendas." }));
-
       const a = estado.abierta;
-      if (a && a.valor === op.valor) {
-        item.append(a.accion === "renombrar" ? panelRenombrar(op) : a.accion === "fusionar" ? panelFusionar(op) : panelEliminar(op));
+      const editando = a && a.valor === op.valor && a.accion === "renombrar";
+      const enUso = op.prendas > 0;
+      const fila = el("div", { className: "fila" });
+      const item = el("div", { className: "opcion" }, fila);
+
+      if (editando) {
+        const input = el("input", { type: "text", value: op.valor, className: "nombre", ariaLabel: `Nuevo nombre de ${op.valor}` });
+        const pista = el("p", { className: "hint" });
+        const actualizar = () => {
+          const nuevo = input.value.trim();
+          const otra = estado.opciones.find((o) => o.valor !== op.valor && norm(o.valor) === norm(nuevo));
+          pista.textContent = otra ? `«${otra.valor}» ya existe: se moverán ${plural(op.prendas)} a esa opción y «${op.valor}» desaparecerá.` : "";
+        };
+        const guardar = () =>
+          ejecutar(
+            "/field/option/rename",
+            { campo: estado.campo, origen: op.valor, nuevo: input.value.trim() },
+            (j) => (j.fusion ? `«${j.origen}» se fusionó con «${j.destino}» (${plural(j.movidas)}).` : `Renombrada a «${j.destino}».`)
+          );
+        input.oninput = actualizar;
+        input.onkeydown = (ev) => {
+          if (ev.key === "Enter") { ev.preventDefault(); guardar(); }
+          if (ev.key === "Escape") cerrarPanel();
+        };
+        actualizar();
+        fila.append(
+          input,
+          el("span", { className: "conteo", textContent: plural(op.prendas) }),
+          el("div", { className: "acciones" }, boton("Guardar", "primary", guardar), boton("Cancelar", "secondary", cerrarPanel))
+        );
+        item.append(pista);
+        queueMicrotask(() => { input.focus(); input.select(); });
+      } else {
+        const nombre = el("span", { className: "nombre", textContent: op.valor, title: "Doble clic para renombrar" });
+        nombre.ondblclick = () => abrir(op.valor, "renombrar");
+        fila.append(
+          nombre,
+          el("span", { className: "conteo", textContent: plural(op.prendas) }),
+          el(
+            "div",
+            { className: "acciones" },
+            boton("Renombrar", "secondary", () => abrir(op.valor, "renombrar")),
+            boton("Fusionar", "secondary", () => abrir(op.valor, "fusionar"), { disabled: estado.opciones.length < 2 }),
+            boton("Eliminar", "danger", () => abrir(op.valor, "eliminar"), { disabled: enUso })
+          )
+        );
+        if (enUso) item.append(el("p", { className: "hint", textContent: "Para eliminarla, fusiónala con otra opción o reasigna sus prendas." }));
+        if (a && a.valor === op.valor) item.append(a.accion === "fusionar" ? panelFusionar(op) : panelEliminar(op));
       }
       cont.append(item);
     });
@@ -209,7 +207,9 @@
   (async function iniciar() {
     try {
       const cfg = await pedir("/api/config");
-      estado.campos = cfg.campos.filter((c) => c.tipo === "lista");
+      estado.campos = cfg.campos
+        .filter((c) => c.tipo === "lista")
+        .sort((x, y) => (x.etiqueta || x.nombre).localeCompare(y.etiqueta || y.nombre, "es", { sensitivity: "base" }));
       if (!estado.campos.length) return aviso("No hay campos de tipo lista.", true);
       const pedido = decodeURIComponent(location.hash.slice(1));
       const inicial = estado.campos.find((c) => c.nombre === pedido) || estado.campos[0];

@@ -53,8 +53,13 @@ CFG = cargar_config()
 LOCK = threading.RLock()
 
 
+def ordenar_opciones(opciones: list[str]) -> list[str]:
+    """Orden alfabético sin distinguir acentos ni mayúsculas. Úsalo siempre que se listen opciones."""
+    return sorted(opciones, key=lambda o: (normalizar(o), o))
+
+
 def config_a_dict() -> dict:
-    return {"campos": CFG["campos"]}
+    return {"campos": [{**c, "opciones": ordenar_opciones(c.get("opciones", []))} for c in CFG["campos"]]}
 
 
 def normalizar(texto: str) -> str:
