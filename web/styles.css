@@ -185,6 +185,23 @@ body.vista-fija .scroll-area { flex: 1; min-height: 0; overflow-y: auto; padding
   box-shadow: 0 0 0 2px var(--accent);
   border-color: var(--accent);
 }
+
+.color-agregar { justify-self: start; padding: 8px 12px; }
+dialog.dialogo-color { width: min(460px, calc(100vw - 24px)); }
+.hex-paleta { display: block; width: 100%; max-width: 360px; margin: 0 auto 10px; }
+.hex-paleta polygon { cursor: pointer; }
+.hex-paleta polygon:hover { filter: brightness(1.12); }
+.hex-paleta polygon.sel { stroke: #1d1914; stroke-width: 2.5; }
+.dialogo-color input[type="range"] { width: 100%; }
+.hex-fila { display: flex; gap: 10px; align-items: center; }
+.hex-fila input { flex: 1; }
+.hex-muestra {
+  flex: none; width: 42px; height: 42px; border-radius: 12px;
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(45deg, #ddd 0 4px, #f5f5f5 4px 8px);
+}
+.hex-error { color: var(--danger); font-size: .88rem; min-height: 1.2em; margin-top: 8px; }
+
 @media (max-width: 1100px) {
   .main-layout, .split { grid-template-columns: 1fr; }
   body.vista-fija { height: auto; overflow: auto; }

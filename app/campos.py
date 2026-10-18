@@ -9,9 +9,17 @@ import json
 import sqlite3
 import threading
 import unicodedata
+import re
 
 from constantes import CONFIG_INICIAL, CONFIG_PATH, NOMBRE_VALIDO, RESERVADOS
 
+
+def normalizar_hex(valor) -> str | None:
+    """'#abc', 'ABC', '#AABBCC' -> '#aabbcc'. None si no es un hex válido."""
+    v = str(valor or "").strip().removeprefix("#")
+    if re.fullmatch(r"[0-9a-fA-F]{3}", v):
+        v = "".join(c * 2 for c in v)
+    return "#" + v.lower() if re.fullmatch(r"[0-9a-fA-F]{6}", v) else None
 
 def guardar_config(cfg: dict) -> None:
     tmp = CONFIG_PATH.with_suffix(".json.tmp")
@@ -42,6 +50,17 @@ def cargar_config() -> dict:
             campo["tipo"] = "texto"
         campo.setdefault("requerido", False)
         campo.setdefault("opciones", [])
+        if "colores" in campo:
+            crudo = campo["colores"] if campo["tipo"] == "lista" and isinstance(campo["colores"], dict) else {}
+            limpio = {}
+            for opcion, valor in crudo.items():
+                hex_ok = normalizar_hex(valor)
+                if opcion in campo["opciones"] and hex_ok:
+                    limpio[opcion] = hex_ok
+            if limpio:
+                campo["colores"] = limpio
+            else:
+                del campo["colores"]
         validos.append(campo)
     cfg["campos"] = validos
     return cfg
@@ -84,13 +103,31 @@ def opcion_existente(campo: dict, valor: str, excepto: str | None = None) -> str
     return None
 
 
-def guardar_opciones(campo: dict, nuevas: list[str]) -> None:
-    """Guarda campos.json con las opciones nuevas y, solo si se escribió, muta `campo` en sitio."""
-    copia = {**CFG, "campos": [{**c, "opciones": nuevas} if c is campo else c for c in CFG["campos"]]}
+def colores_de(campo: dict) -> dict[str, str]:
+    """Copia editable del mapa opción -> hex del campo ({} si no tiene)."""
+    return dict(campo.get("colores") or {})
+
+
+def guardar_opciones(campo: dict, nuevas: list[str], colores: dict[str, str] | None = None) -> None:
+    """Guarda campos.json con las opciones (y, si se pasa, los colores) nuevos.
+    Solo si se escribió, muta `campo` en sitio. `colores=None` deja los colores como están."""
+    def con_cambios(c: dict) -> dict:
+        nuevo = {**c, "opciones": nuevas}
+        if colores is not None:
+            if colores:
+                nuevo["colores"] = colores
+            else:
+                nuevo.pop("colores", None)
+        return nuevo
+
+    copia = {**CFG, "campos": [con_cambios(c) if c is campo else c for c in CFG["campos"]]}
     guardar_config(copia)
     campo["opciones"][:] = nuevas
-
-
+    if colores is not None:
+        if colores:
+            campo["colores"] = dict(colores)
+        else:
+            campo.pop("colores", None)
 def canonical(campo: dict, valor: str) -> str:
     for opcion in campo.get("opciones", []):
         if opcion.casefold() == valor.casefold():

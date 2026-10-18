@@ -15,8 +15,14 @@
         "naranja",
         "verde",
         "azul",
-        "rosa"
-      ]
+        "rosa",
+        "Morado",
+        "Cafesito"
+      ],
+      "colores": {
+        "Morado": "#bd0df2",
+        "Cafesito": "#d49e2b"
+      }
     },
     {
       "nombre": "temporada",
@@ -36,6 +42,16 @@
         "Chamarra",
         "Batas",
         "Blazer"
+      ]
+    },
+    {
+      "nombre": "talla",
+      "etiqueta": "Talla",
+      "tipo": "lista",
+      "requerido": false,
+      "opciones": [
+        "32",
+        "M"
       ]
     }
   ]

@@ -137,6 +137,8 @@ class RoperoHandler(BaseHTTPRequestHandler):
             return self.create_field()
         if parsed.path == "/field/option":
             return self.add_field_option()
+        if parsed.path == "/field/option/color":
+            return self.set_option_color()
         if parsed.path == "/field/option/rename":
             return self.move_field_option(exigir_existente=False)
         if parsed.path == "/field/option/merge":
@@ -277,9 +279,13 @@ class RoperoHandler(BaseHTTPRequestHandler):
         form = read_form(self)
         campo_nombre = form_value(form, "campo").strip()
         opcion = form_value(form, "opcion").strip()
+        hex_raw = form_value(form, "hex").strip()
+        hex_ok = campos.normalizar_hex(hex_raw) if hex_raw else None
 
         if not campo_nombre or not opcion:
             return self._send_json({"ok": False, "error": "Faltan datos."}, status=HTTPStatus.BAD_REQUEST)
+        if hex_raw and hex_ok is None:
+            return self._send_json({"ok": False, "error": "El hex no es válido."}, status=HTTPStatus.BAD_REQUEST)
 
         for campo in campos.CFG["campos"]:
             if campo["nombre"] != campo_nombre:
@@ -290,14 +296,48 @@ class RoperoHandler(BaseHTTPRequestHandler):
                 existente = campos.opcion_existente(campo, opcion)
                 if existente:
                     return self._send_json({"ok": False, "error": f"Ya existe «{existente}»."}, status=HTTPStatus.CONFLICT)
+                colores = None
+                if hex_ok:
+                    colores = campos.colores_de(campo)
+                    colores[opcion] = hex_ok
                 try:
-                    campos.guardar_opciones(campo, [*campo["opciones"], opcion])
+                    campos.guardar_opciones(campo, [*campo["opciones"], opcion], colores)
                 except OSError as exc:
                     return self._send_json({"ok": False, "error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
-            return self._send_json({"ok": True, "campo": campo_nombre, "opcion": opcion})
+            return self._send_json({"ok": True, "campo": campo_nombre, "opcion": opcion, "hex": hex_ok})
 
         return self._send_json({"ok": False, "error": "Campo no encontrado."}, status=HTTPStatus.NOT_FOUND)
 
+    def set_option_color(self):
+        """Asigna (o quita, con hex vacío) el hex de una opción existente."""
+        form = read_form(self)
+        nombre = form_value(form, "campo").strip()
+        opcion = form_value(form, "opcion").strip()
+        hex_raw = form_value(form, "hex").strip()
+        hex_ok = campos.normalizar_hex(hex_raw) if hex_raw else None
+
+        def error(texto: str, status: HTTPStatus = HTTPStatus.BAD_REQUEST):
+            return self._send_json({"ok": False, "error": texto}, status=status)
+
+        if hex_raw and hex_ok is None:
+            return error("El hex no es válido.")
+        with campos.LOCK:
+            campo = campos.campo_lista(nombre)
+            if campo is None:
+                return error("Campo no encontrado.", HTTPStatus.NOT_FOUND)
+            existente = campos.opcion_existente(campo, opcion)
+            if existente is None:
+                return error("La opción no existe.", HTTPStatus.NOT_FOUND)
+            colores = campos.colores_de(campo)
+            if hex_ok:
+                colores[existente] = hex_ok
+            else:
+                colores.pop(existente, None)
+            try:
+                campos.guardar_opciones(campo, list(campo["opciones"]), colores)
+            except OSError as exc:
+                return error(f"No se pudo guardar: {exc}", HTTPStatus.INTERNAL_SERVER_ERROR)
+        return self._send_json({"ok": True, "campo": nombre, "opcion": existente, "hex": hex_ok})
     def list_field_options(self, query: str):
         nombre = parse_qs(query).get("campo", [""])[0].strip()
         campo = campos.campo_lista(nombre)
@@ -344,11 +384,15 @@ class RoperoHandler(BaseHTTPRequestHandler):
                 nuevas = [o for o in campo["opciones"] if o != origen]
             else:
                 nuevas = [final if o == origen else o for o in campo["opciones"]]
+            colores = campos.colores_de(campo)
+            hex_origen = colores.pop(origen, None)
+            if hex_origen and final not in colores:
+                colores[final] = hex_origen
             try:
                 with open_db() as db:
                     movidas = reasignar_valor(db, nombre, origen, final)
                     # Si guardar falla, open_db no hace commit y la base queda intacta.
-                    campos.guardar_opciones(campo, nuevas)
+                    campos.guardar_opciones(campo, nuevas, colores)
             except (sqlite3.Error, OSError) as exc:
                 return error(f"No se pudo guardar: {exc}", HTTPStatus.INTERNAL_SERVER_ERROR)
         return self._send_json({"ok": True, "fusion": fusion, "movidas": movidas, "origen": origen, "destino": final})
@@ -372,7 +416,9 @@ class RoperoHandler(BaseHTTPRequestHandler):
                     n = contar_prendas_con(db, nombre, origen)
                     if n:
                         return error(f"«{origen}» tiene {n} prendas. Reasígnalas o fusiona primero.", HTTPStatus.CONFLICT)
-                    campos.guardar_opciones(campo, [o for o in campo["opciones"] if o != origen])
+                    colores = campos.colores_de(campo)
+                    colores.pop(origen, None)
+                    campos.guardar_opciones(campo, [o for o in campo["opciones"] if o != origen], colores)
             except (sqlite3.Error, OSError) as exc:
                 return error(f"No se pudo guardar: {exc}", HTTPStatus.INTERNAL_SERVER_ERROR)
         return self._send_json({"ok": True, "origen": origen})

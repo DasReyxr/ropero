@@ -17,11 +17,11 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent      # ropero/app
 BASE = APP_DIR.parent                          # ropero/
 DB_PATH = BASE / "ropero.db"
-CONFIG_PATH = APP_DIR / "campos.json"
 SRC = BASE / "src"
 WEB = BASE / "web"
 FRONTEND_PATH = WEB / "index.html"
 CAMPOS_PATH = WEB / "campos.html"
+CONFIG_PATH = WEB / "campos.json"
 
 # --- Constantes ----------------------------------------------------------
 EXTENSIONES = {".jpg", ".jpeg", ".png", ".webp"}

@@ -41,6 +41,7 @@ document.addEventListener('click', (event) => {
 async function loadConfig() {
   const response = await fetch('/api/config');
   state.config = await response.json();
+  await migrarHexLocales();
   renderDynamicFilters();
   renderFormFields('#garment-fields', state.config.campos, 'garment');
   renderFormFields('#batch-fields', state.config.campos, 'batch');
@@ -147,15 +148,15 @@ const normalizarTexto = (t) => String(t ?? '')
 
 function cssDeColor(nombre) {
   const n = normalizarTexto(nombre);
+  const propio = leerHexGuardados()[n];
+  if (propio) return propio;
   if (COLORES_CSS[n]) return COLORES_CSS[n];
-  // Aproximación por primera palabra ("verde lima" -> verde)
   const primera = n.split(/\s+/)[0];
   return COLORES_CSS[primera] || null;
 }
 
 
-function buildColorPicker(campo, fieldId, name, compacto = false) {
-  const root = document.createElement('div');
+function buildColorPicker(campo, fieldId, name, compacto = false, permitirAgregar = false) {  const root = document.createElement('div');
   root.className = 'color-picker' + (compacto ? ' compacto' : '');
 
   const hidden = document.createElement('input');
@@ -235,14 +236,265 @@ function buildColorPicker(campo, fieldId, name, compacto = false) {
   });
 
   root.refresh = refresh;
-  root.campoInput = hidden;      // antes: root.hidden (propiedad nativa del DOM)
-  root.append(hidden, search, status, grid, empty);
+  root.campoInput = hidden;
+  root._cfg = { fieldId, name, compacto, permitirAgregar };
+
+  const extras = [];
+  if (permitirAgregar) {
+    const btnAgregar = document.createElement('button');
+    btnAgregar.type = 'button';
+    btnAgregar.className = 'btn secondary color-agregar';
+    btnAgregar.textContent = '+ Agregar color';
+    btnAgregar.addEventListener('click', () => {
+      abrirDialogoColor((nom, hex) => agregarColorNuevo(nom, hex, fieldId));
+    });
+    extras.push(btnAgregar);
+  }
+  root.append(hidden, search, status, grid, empty, ...extras);
   refresh();
   return root;
 }
 
 function refreshColorPickers() {
   document.querySelectorAll('.color-picker').forEach(p => p.refresh());
+}
+
+// ---------- Colores propios: hex en localStorage + diálogo con paleta hexagonal ----------
+const HEX_KEY = 'ropero_colores_hex';
+
+function hexDeServidor(nombre) {
+  const campo = state.config?.campos.find(c => c.nombre === 'color');
+  const n = normalizarTexto(nombre);
+  for (const [op, hex] of Object.entries(campo?.colores || {})) {
+    if (normalizarTexto(op) === n) return hex;
+  }
+  return null;
+}
+
+function cssDeColor(nombre) {
+  const n = normalizarTexto(nombre);
+  return hexDeServidor(nombre) || COLORES_CSS[n] || COLORES_CSS[n.split(/\s+/)[0]] || null;
+}
+
+function hslAHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const aHex = (x) => Math.round(x * 255).toString(16).padStart(2, '0');
+  return `#${aHex(f(0))}${aHex(f(8))}${aHex(f(4))}`;
+}
+
+// Acepta "#abc", "abc", "#aabbcc", "aabbcc". Devuelve "#aabbcc" o null.
+function normalizarHex(valor) {
+  let v = String(valor ?? '').trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(v)) v = v.split('').map(c => c + c).join('');
+  return /^[0-9a-f]{6}$/i.test(v) ? '#' + v.toLowerCase() : null;
+}
+
+function reemplazarColorPickers(campoColor) {
+  document.querySelectorAll('.color-picker').forEach(viejo => {
+    const cfg = viejo._cfg;
+    const nuevo = buildColorPicker(campoColor, cfg.fieldId, cfg.name, cfg.compacto, cfg.permitirAgregar);
+    nuevo.campoInput.value = viejo.campoInput.value;
+    if (cfg.compacto) {                       // el del sidebar es un filtro
+      nuevo.campoInput.addEventListener('change', applyFilters);
+      nuevo.campoInput.addEventListener('input', applyFilters);
+    }
+    viejo.replaceWith(nuevo);
+    nuevo.refresh();
+  });
+}
+
+async function agregarColorNuevo(nombre, hex, fieldId) {
+  try {
+    const body = new FormData();
+    body.append('campo', 'color');
+    body.append('opcion', nombre);
+    body.append('hex', hex);
+    const resp = await fetch('/field/option', { method: 'POST', body });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) return data.error || 'No se pudo agregar el color.';
+    const cfgResp = await fetch('/api/config');
+    state.config = await cfgResp.json();
+  } catch {
+    return 'No se pudo conectar con el servidor.';
+  }
+  const campoColor = state.config.campos.find(c => c.nombre === 'color');
+  const guardado = campoColor.opciones.find(o => normalizarTexto(o) === normalizarTexto(nombre)) || nombre;
+  reemplazarColorPickers(campoColor);
+  const input = document.getElementById(fieldId);
+  if (input) input.value = guardado;
+  refreshColorPickers();
+  return null;
+}
+
+async function enviarHexColor(opcion, hex) {
+  try {
+    const body = new FormData();
+    body.append('campo', 'color');
+    body.append('opcion', opcion);
+    body.append('hex', hex);
+    const resp = await fetch('/field/option/color', { method: 'POST', body });
+    const data = await resp.json();
+    return resp.ok && data.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Sube a campos.json los hex que estaban en localStorage y los borra de ahí.
+async function migrarHexLocales() {
+  let mapa = null;
+  try { mapa = JSON.parse(localStorage.getItem(HEX_KEY)); } catch { return; }
+  if (!mapa || typeof mapa !== 'object') return;
+  const campoColor = state.config.campos.find(c => c.nombre === 'color');
+  if (!campoColor) return;
+  const enServidor = new Set(Object.keys(campoColor.colores || {}).map(normalizarTexto));
+  let subidos = 0;
+  for (const [clave, hex] of Object.entries(mapa)) {
+    const opcion = campoColor.opciones.find(o => normalizarTexto(o) === clave);
+    if (!opcion) { delete mapa[clave]; continue; }          // la opción ya no existe
+    if (!enServidor.has(clave)) {
+      if (!(await enviarHexColor(opcion, hex))) continue;   // se reintenta en la próxima carga
+      subidos++;
+    }
+    delete mapa[clave];
+  }
+  try {
+    if (Object.keys(mapa).length) localStorage.setItem(HEX_KEY, JSON.stringify(mapa));
+    else localStorage.removeItem(HEX_KEY);
+  } catch { /* sin almacenamiento */ }
+  if (subidos) {
+    try { state.config = await (await fetch('/api/config')).json(); } catch { /* se ve en la próxima carga */ }
+  }
+}
+
+let dialogoColor = null;
+
+function abrirDialogoColor(alGuardar) {
+  if (!dialogoColor) dialogoColor = crearDialogoColor();
+  dialogoColor.abrir(alGuardar);
+}
+
+function crearDialogoColor() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const dlg = document.createElement('dialog');
+  dlg.className = 'dialogo-color';
+  dlg.innerHTML = `
+    <div class="modal">
+      <div class="head">
+        <div>
+          <h2>Agregar color</h2>
+          <p>Elige un tono en la paleta hexagonal o escribe el código hex.</p>
+        </div>
+        <button class="close" type="button" data-accion="cerrar">×</button>
+      </div>
+      <div class="content">
+        <svg class="hex-paleta" role="img" aria-label="Paleta hexagonal de colores"></svg>
+        <label for="hex-luz">Luminosidad</label>
+        <input id="hex-luz" type="range" min="5" max="95" value="50">
+        <label for="hex-valor">Hex</label>
+        <div class="hex-fila">
+          <input id="hex-valor" type="text" placeholder="#1f5fbf" maxlength="7" autocomplete="off">
+          <span class="hex-muestra" id="hex-muestra"></span>
+        </div>
+        <label for="hex-nombre">Nombre del color</label>
+        <input id="hex-nombre" type="text" placeholder="Ej. Azul petróleo" autocomplete="off">
+        <div class="hex-error" id="hex-error"></div>
+      </div>
+      <div class="footer">
+        <button class="btn primary" type="button" data-accion="guardar">Agregar color</button>
+        <button class="btn secondary" type="button" data-accion="cerrar">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dlg);
+
+  const svg = dlg.querySelector('.hex-paleta');
+  const luz = dlg.querySelector('#hex-luz');
+  const valor = dlg.querySelector('#hex-valor');
+  const muestra = dlg.querySelector('#hex-muestra');
+  const nombre = dlg.querySelector('#hex-nombre');
+  const error = dlg.querySelector('#hex-error');
+  const btnGuardar = dlg.querySelector('[data-accion="guardar"]');
+  let alGuardarFn = null;
+
+  function actualizarMuestra() {
+    const hex = normalizarHex(valor.value);
+    muestra.style.background = hex || '';
+    valor.style.borderColor = (valor.value && !hex) ? 'var(--danger)' : '';
+    svg.querySelectorAll('polygon').forEach(p => p.classList.toggle('sel', p.dataset.hex === hex));
+  }
+
+  function dibujar() {
+    const N = 8, size = 15;                    // N anillos; size = radio de cada hexágono
+    const w = Math.sqrt(3) * size;
+    const maxD = w * N;
+    const hw = w * N + size, hh = 1.5 * size * N + size;
+    svg.setAttribute('viewBox', `${-hw} ${-hh} ${2 * hw} ${2 * hh}`);
+    svg.replaceChildren();
+    for (let r = -N; r <= N; r++) {
+      for (let q = -N; q <= N; q++) {
+        if (Math.abs(q + r) > N) continue;
+        const x = w * (q + r / 2), y = 1.5 * size * r;
+        let hue = Math.atan2(y, x) * 180 / Math.PI;
+        if (hue < 0) hue += 360;
+        const sat = Math.min(100, (Math.hypot(x, y) / maxD) * 100);
+        const hex = hslAHex(hue, sat, Number(luz.value));
+        const pts = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (60 * i + 30) * Math.PI / 180;
+          pts.push(`${(x + (size - 0.6) * Math.cos(a)).toFixed(2)},${(y + (size - 0.6) * Math.sin(a)).toFixed(2)}`);
+        }
+        const poly = document.createElementNS(NS, 'polygon');
+        poly.setAttribute('points', pts.join(' '));
+        poly.setAttribute('fill', hex);
+        poly.dataset.hex = hex;
+        poly.addEventListener('click', () => {
+          valor.value = hex;
+          error.textContent = '';
+          actualizarMuestra();
+        });
+        svg.appendChild(poly);
+      }
+    }
+    actualizarMuestra();
+  }
+
+  async function guardar() {
+    const hex = normalizarHex(valor.value);
+    const nom = nombre.value.trim();
+    if (!hex) { error.textContent = 'Escribe un hex válido (por ejemplo #1f5fbf) o elige uno de la paleta.'; return; }
+    if (!nom) { error.textContent = 'Ponle un nombre al color.'; return; }
+    btnGuardar.disabled = true;
+    const msg = await alGuardarFn(nom, hex);
+    btnGuardar.disabled = false;
+    if (msg) { error.textContent = msg; return; }
+    dlg.close();
+  }
+
+  luz.addEventListener('input', dibujar);
+  valor.addEventListener('input', () => { error.textContent = ''; actualizarMuestra(); });
+  valor.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); nombre.focus(); } });
+  nombre.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); guardar(); } });
+  dlg.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-accion]');
+    if (!btn) return;
+    if (btn.dataset.accion === 'cerrar') dlg.close();
+    else if (btn.dataset.accion === 'guardar') guardar();
+  });
+
+  return {
+    abrir(fn) {
+      alGuardarFn = fn;
+      valor.value = '';
+      nombre.value = '';
+      error.textContent = '';
+      luz.value = 50;
+      dibujar();
+      dlg.showModal();
+    },
+  };
 }
 //
 
@@ -260,7 +512,9 @@ function renderFormFields(containerSelector, campos, prefix) {
     if (campo.tipo === 'lista' && campo.nombre === 'color') {
       block.appendChild(buildColorPicker(
         campo, fieldId,
-        prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`
+        prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`,
+        false,
+        prefix === 'garment'
       ));
     }
     else if (campo.tipo === 'lista') {
@@ -415,6 +669,22 @@ $('#delete-garment').addEventListener('click', () => {
 });
 
 wireModalPreviews();
-
+$('#garment-form').addEventListener('submit', () => {
+  const params = new URLSearchParams($('#garment-return-query').value.replace(/^\?/, ''));
+  for (const campo of state.config.campos) {
+    if (!params.has(campo.nombre)) continue;
+    const filtro = normalizarTexto(params.get(campo.nombre));
+    const nuevo = normalizarTexto(document.getElementById(`garment-${campo.nombre}`)?.value);
+    const cumple = campo.tipo === 'lista' ? nuevo === filtro : nuevo.includes(filtro);
+    if (!cumple) params.delete(campo.nombre);
+  }
+  if (params.has('q')) {
+    const q = normalizarTexto(params.get('q'));
+    const texto = normalizarTexto($('#garment-identificador').value + ' ' + $('#garment-comentarios').value);
+    if (!texto.includes(q)) params.delete('q');
+  }
+  const qs = params.toString();
+  $('#garment-return-query').value = qs ? '?' + qs : '';
+});
 loadConfig();
 
