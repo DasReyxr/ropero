@@ -740,3 +740,8 @@ window.addEventListener('resize', () => aplicarCols(cols));
 aplicarCols(cols);
 
 loadConfig();
+
+// --- PWA: el service worker solo se registra en contexto seguro (HTTPS o localhost) ---
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('/sw.js').catch(() => { /* sin soporte: la web sigue funcionando */ });
+}

@@ -14,7 +14,10 @@ ropero/
 │   ├── app.js         # lógica de index.html
 │   ├── campos.html    # vista completa "Administrar campos" (/campos)
 │   ├── campos.js      # lógica de campos.html
-│   └── styles.css     # estilos compartidos por ambas vistas
+│   ├── styles.css     # estilos compartidos por ambas vistas
+│   ├── manifest.webmanifest  # PWA: nombre, colores, íconos
+│   ├── sw.js          # PWA: service worker (se sirve en /sw.js, no en /static/)
+│   └── icon-*.png, apple-touch-icon.png   # íconos de la PWA
 └── app/
     ├── campos.json    # definición de campos dinámicos (se crea solo)
     ├── constantes.py  # rutas y constantes (sin lógica)
@@ -63,7 +66,9 @@ Para ahorrar contexto: lee solo el archivo necesario, más `constantes.py` (es c
 |---|---|---|
 | GET | `/`, `/ui`, `/batch` | Sirve `web/index.html` |
 | GET | `/campos` | Sirve `web/campos.html` (administrar campos) |
-| GET | `/static/<archivo>` | Solo `.css` y `.js` ubicados directamente en `web/` |
+| GET | `/static/<archivo>` | Solo `.css`, `.js` y `.png` ubicados directamente en `web/` |
+| GET | `/manifest.webmanifest` | Manifest de la PWA (`MANIFEST_PATH`) |
+| GET | `/sw.js` | Service worker (`SW_PATH`); debe estar en la raíz para controlar toda la app |
 | GET | `/img/<nombre>` | Foto desde `src/` |
 | GET | `/api/config` | Campos dinámicos (`{"campos": [...]}`), con `opciones` ordenadas |
 | GET | `/api/campos/opciones?campo=` | Opciones de un campo lista con conteo de prendas (`{"campo", "etiqueta", "opciones": [{"valor", "prendas"}]}`), ordenadas |
@@ -74,6 +79,7 @@ Para ahorrar contexto: lee solo el archivo necesario, más `constantes.py` (es c
 | POST | `/delete` | Borra prenda y su foto (`record_id`) |
 | POST | `/field/new` | Crea campo: columna en SQLite + entrada en `campos.json` |
 | POST | `/field/option` | Agrega opción a un campo lista (`campo`, `opcion`). 409 si ya existe una equivalente |
+| POST | `/field/option/color` | Asigna o quita el hex de una opción (`campo`, `opcion`, `hex`; hex vacío = quitar). JSON `{"ok": bool, ...}` |
 | POST | `/field/option/rename` | Renombra (`campo`, `origen`, `nuevo`). Si `nuevo` ya existe, se convierte en fusión |
 | POST | `/field/option/merge` | Fusiona (`campo`, `origen`, `destino` existente). Mueve las prendas y elimina `origen` |
 | POST | `/field/option/delete` | Elimina (`campo`, `origen`). 409 si tiene prendas |
@@ -109,6 +115,15 @@ Solo aplica a campos de tipo `lista`. Reglas de negocio:
 - **Agregar** rechaza duplicados normalizados.
 - `db.reasignar_valor()` mueve todos los valores de la base equivalentes al origen (incluye variantes sueltas de mayúsculas/acentos) y no hace commit; lo hace `open_db()`.
 - No se renombran ni eliminan campos completos (columnas) desde este menú; los campos `texto` no aparecen.
+
+## PWA (instalable en el celular)
+
+- `manifest.webmanifest` + `sw.js` + íconos en `web/`. `index.html` enlaza el manifest y `app.js` registra el service worker **solo si** `window.isSecureContext` (HTTPS o `localhost`).
+- El service worker usa red primero y caché solo como respaldo; nunca guarda `/api/` ni `/img/`. Sin conexión abre el armazón de la app, pero sin prendas.
+- Instalar en Android requiere HTTPS. En iOS "Añadir a pantalla de inicio" funciona también por HTTP.
+- HTTPS: `python main_ropero.py --host 0.0.0.0 --cert cert.pem --key key.pem`, o dejar `127.0.0.1` detrás de un proxy (p. ej. Tailscale Serve).
+- Si cambias el nombre de un archivo precacheado en `sw.js` (`BASICOS`), sube la versión de `CACHE`.
+- Nuevos `.webmanifest` o `.png` fuera de `web/` no se sirven; las rutas nuevas se definen en `constantes.py`.
 
 ## Convenciones y cuidados
 

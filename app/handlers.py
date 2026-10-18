@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode, urlparse, parse_qs
 
 import campos
-from constantes import CAMPOS_PATH, EXTENSIONES, FRONTEND_PATH, RESERVADOS, SRC, WEB
+from constantes import CAMPOS_PATH, EXTENSIONES, FRONTEND_PATH, MANIFEST_PATH, RESERVADOS, SRC, SW_PATH, WEB
 from db import (
     asegurar_columna,
     cargar_prenda,
@@ -43,10 +43,13 @@ class RoperoHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):  # noqa: A003
         return
 
-    def _send_bytes(self, data: bytes, status: HTTPStatus = HTTPStatus.OK, content_type: str = "text/html; charset=utf-8"):
+    def _send_bytes(self, data: bytes, status: HTTPStatus = HTTPStatus.OK, content_type: str = "text/html; charset=utf-8",
+                    headers: dict[str, str] | None = None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
+        for nombre, valor in (headers or {}).items():
+            self.send_header(nombre, valor)
         self.end_headers()
         self.wfile.write(data)
 
@@ -72,6 +75,12 @@ class RoperoHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if path == "/sw.js":
+            return self.serve_pwa(SW_PATH, "text/javascript; charset=utf-8",
+                                  {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+        if path == "/manifest.webmanifest":
+            return self.serve_pwa(MANIFEST_PATH, "application/manifest+json; charset=utf-8",
+                                  {"Cache-Control": "no-cache"})
         if path.startswith("/img/"):
             return self.serve_image(path.removeprefix("/img/"))
         if path.startswith("/static/"):
@@ -115,14 +124,21 @@ class RoperoHandler(BaseHTTPRequestHandler):
         self._send_bytes(path.read_bytes(), content_type=content_type)
 
     def serve_static(self, rel_name: str):
-        """Sirve solo .css y .js que estén directamente en web/."""
+        """Sirve solo .css, .js y .png que estén directamente en web/."""
         nombre = Path(rel_name).name
-        tipos = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8"}
+        tipos = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png"}
         content_type = tipos.get(Path(nombre).suffix.lower())
         path = WEB / nombre
         if not nombre or content_type is None or not path.is_file():
             return self._send_404()
         self._send_bytes(path.read_bytes(), content_type=content_type)
+
+    def serve_pwa(self, ruta: Path, content_type: str, headers: dict[str, str]):
+        """Manifest y service worker. El service worker debe colgar de la raíz (/sw.js)
+        para poder controlar toda la app; por eso no va bajo /static/."""
+        if not ruta.is_file():
+            return self._send_404()
+        self._send_bytes(ruta.read_bytes(), content_type=content_type, headers=headers)
 
     # --- POST ------------------------------------------------------------
     def do_POST(self):

@@ -22,6 +22,8 @@ WEB = BASE / "web"
 FRONTEND_PATH = WEB / "index.html"
 CAMPOS_PATH = WEB / "campos.html"
 CONFIG_PATH = WEB / "campos.json"
+MANIFEST_PATH = WEB / "manifest.webmanifest"   # PWA
+SW_PATH = WEB / "sw.js"                         # PWA (se sirve en /sw.js)
 
 # --- Constantes ----------------------------------------------------------
 EXTENSIONES = {".jpg", ".jpeg", ".png", ".webp"}
