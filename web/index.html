@@ -6,7 +6,7 @@
   <title>Ropero</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
+<body class="vista-fija">
   <div class="shell">
     <div class="main-layout">
       <!-- Columna Izquierda: Marca, Botones de acción y Filtros -->
@@ -50,8 +50,10 @@
             <h2>Prendas</h2>
             <p class="muted">Cada tarjeta abre un popup para editar o borrar.</p>
           </div>
-          <div id="card-grid" class="cards"></div>
-          <div id="empty-state" class="empty hidden">No hay prendas que coincidan con los filtros.</div>
+          <div class="scroll-area">
+            <div id="card-grid" class="cards"></div>
+            <div id="empty-state" class="empty hidden">No hay prendas que coincidan con los filtros.</div>
+          </div>
         </div>
       </main>
     </div>
