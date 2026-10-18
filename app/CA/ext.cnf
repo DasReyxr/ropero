@@ -1,0 +1,4 @@
+subjectAltName=IP:100.99.81.64
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
