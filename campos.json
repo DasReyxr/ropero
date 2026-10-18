@@ -1,0 +1,43 @@
+{
+  "campos": [
+    {
+      "nombre": "color",
+      "etiqueta": "Color",
+      "tipo": "lista",
+      "requerido": true,
+      "sugerir_color": true,
+      "opciones": [
+        "negro",
+        "blanco",
+        "gris",
+        "beige",
+        "café",
+        "rojo",
+        "naranja",
+        "amarillo",
+        "verde",
+        "turquesa",
+        "azul",
+        "azul marino",
+        "morado",
+        "rosa",
+        "Cafe",
+        "blanca"
+      ]
+    },
+    {
+      "nombre": "temporada",
+      "etiqueta": "Temporada / tipo de outfit",
+      "tipo": "lista",
+      "requerido": true,
+      "opciones": [
+        "Hoodie",
+        "Camisa",
+        "Pantalon",
+        "Chaqueta",
+        "Playera",
+        "HoodieDelgadita"
+      ]
+    }
+  ]
+}

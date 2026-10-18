@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ropero</title>
+  <style>
+    :root {
+      --bg: #f2eee6;
+      --panel: rgba(255, 255, 255, 0.82);
+      --ink: #1d1914;
+      --muted: #6b6258;
+      --line: rgba(199, 188, 174, 0.9);
+      --accent: #2f5d50;
+      --accent-2: #a15c2f;
+      --danger: #9a2d2d;
+      --shadow: 0 24px 60px rgba(43, 31, 19, 0.14);
+      --radius: 22px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255, 248, 228, 0.95), transparent 32%),
+        radial-gradient(circle at 90% 0%, rgba(214, 232, 222, 0.72), transparent 28%),
+        linear-gradient(180deg, #f6f1e8 0%, #ece6db 100%);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body { min-height: 100vh; }
+    a { color: inherit; }
+    button, input, select, textarea { font: inherit; }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 22px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius);
+      background: var(--panel); backdrop-filter: blur(16px); box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    .brand h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.8rem); letter-spacing: -0.05em; }
+    .brand p { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .pill, .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border-radius: 999px; border: 1px solid transparent; text-decoration: none;
+      padding: 11px 16px; font-weight: 700; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .pill:hover, .btn:hover { transform: translateY(-1px); }
+    .pill { background: rgba(47, 93, 80, 0.10); color: var(--accent); }
+    .btn.primary { background: var(--accent); color: white; }
+    .btn.secondary { background: #efe5d5; color: var(--ink); }
+    .btn.danger { background: #f4d9d9; color: var(--danger); }
+    .grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); backdrop-filter: blur(16px);
+    }
+    .panel .inner { padding: 18px; }
+    .stack { display: grid; gap: 14px; }
+    .section { padding-bottom: 14px; border-bottom: 1px solid rgba(199, 188, 174, 0.55); margin-bottom: 14px; }
+    .section:last-child { padding-bottom: 0; border-bottom: 0; margin-bottom: 0; }
+    .section h2 { margin: 0 0 8px; font-size: 1.05rem; }
+    .muted { color: var(--muted); }
+    label { display: block; margin: 10px 0 6px; font-weight: 700; font-size: .92rem; }
+    input[type="text"], input[type="search"], input[type="file"], select, textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 14px; background: white;
+      padding: 11px 12px; color: inherit;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .filters { display: grid; gap: 10px; }
+    .filters .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .card { overflow: hidden; }
+    .card img, .card .ph { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; display: block; background: #e7dfd1; }
+    .card .body { padding: 14px; }
+    .card h3 { margin: 0 0 8px; overflow-wrap: anywhere; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .badge { border-radius: 999px; padding: 5px 10px; background: #f1ece3; font-size: .82rem; color: #5f564c; }
+    .card .tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .notice { padding: 14px 16px; border-radius: 16px; border: 1px solid #efd7aa; background: #fff7e8; color: #6b4d15; }
+    .empty { padding: 24px; text-align: center; color: var(--muted); }
+    dialog {
+      width: min(980px, calc(100vw - 24px)); border: 0; border-radius: 24px; padding: 0;
+      box-shadow: 0 30px 80px rgba(0,0,0,.25); background: transparent;
+    }
+    dialog::backdrop { background: rgba(20, 16, 11, .54); backdrop-filter: blur(8px); }
+    .modal {
+      background: #fbf8f2; border: 1px solid rgba(199,188,174,.8); border-radius: 24px; overflow: hidden;
+    }
+    .modal .head {
+      display: flex; align-items: start; justify-content: space-between; gap: 14px; padding: 18px 18px 0;
+    }
+    .modal .head h2 { margin: 0; font-size: 1.3rem; }
+    .modal .head p { margin: 6px 0 0; color: var(--muted); }
+    .modal .content { padding: 18px; }
+    .modal .footer { display: flex; gap: 10px; flex-wrap: wrap; padding: 0 18px 18px; }
+    .modal .close { border: 0; background: transparent; font-size: 2rem; line-height: 1; cursor: pointer; color: var(--muted); }
+    .split { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: start; }
+    .preview-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
+    .preview-item { padding: 10px; border: 1px solid var(--line); border-radius: 16px; background: white; display: grid; gap: 8px; }
+    .preview-item img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px; }
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .hint { font-size: .88rem; color: var(--muted); }
+    .hidden { display: none !important; }
+    @media (max-width: 1100px) {
+      .grid, .split { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Ropero</h1>
+        <p>Interfaz separada del backend. Los datos vienen de SQLite y los filtros se construyen desde <span class="muted">campos.json</span>.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="open-add">Añadir prenda</button>
+        <button class="btn secondary" id="open-batch">Cargar en bonche</button>
+        <button class="btn secondary" id="open-field">Nuevo campo</button>
+      </div>
+    </header>
+
+    <section class="panel" style="margin-bottom:18px;">
+      <div class="inner">
+        <div class="toolbar">
+          <a class="pill" href="/" id="count-pill">0 prendas</a>
+          <button class="pill" id="refresh-btn" type="button">Refrescar</button>
+        </div>
+        <form class="filters" id="filters-form">
+          <div class="two">
+            <div>
+              <label for="q">Buscar</label>
+              <input id="q" name="q" type="search" placeholder="Identificador, comentarios o campo">
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <div class="actions">
+                <button class="btn primary" type="submit">Filtrar</button>
+                <button class="btn secondary" type="button" id="clear-filters">Limpiar</button>
+              </div>
+            </div>
+          </div>
+          <div id="dynamic-filters" class="stack"></div>
+        </form>
+      </div>
+    </section>
+
+    <main class="panel">
+      <div class="inner">
+        <div class="section">
+          <h2>Prendas</h2>
+          <p class="muted">Cada tarjeta abre un popup para editar o borrar.</p>
+        </div>
+        <div id="card-grid" class="cards"></div>
+        <div id="empty-state" class="empty hidden">No hay prendas que coincidan con los filtros.</div>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="garment-dialog">
+    <div class="modal">
+      <div class="head">
+        <div>
+          <h2 id="garment-title">Prenda</h2>
+          <p id="garment-subtitle">Edita o crea una prenda sin salir de la página.</p>
+        </div>
+        <button class="close" type="button" data-close="garment-dialog">×</button>
+      </div>
+      <div class="content split">
+        <form id="garment-form" method="post" action="/save" enctype="multipart/form-data">
+          <input type="hidden" name="record_id" id="garment-record-id">
+          <input type="hidden" name="current_photo" id="garment-current-photo">
+          <label for="garment-identificador">Identificador</label>
+          <input id="garment-identificador" name="identificador" type="text" placeholder="HoodieNegro" required>
+          <label for="garment-foto">Foto</label>
+          <input id="garment-foto" name="foto" type="file" accept="image/*">
+          <div id="garment-fields"></div>
+          <label for="garment-comentarios">Comentarios</label>
+          <textarea id="garment-comentarios" name="comentarios" placeholder="Notas internas..."></textarea>
+          <div class="footer" style="padding-left:0;padding-right:0;">
+            <button class="btn primary" type="submit">Guardar</button>
+            <button class="btn secondary" type="button" data-close="garment-dialog">Cancelar</button>
+            <button class="btn danger hidden" type="button" id="delete-garment">Borrar</button>
+          </div>
+        </form>
+        <aside>
+          <div class="panel">
+            <div class="inner">
+              <div class="section">
+                <h2>Vista previa</h2>
+                <p class="hint">La foto seleccionada o la actual se muestra aquí.</p>
+              </div>
+              <img id="garment-preview" alt="Vista previa" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:18px;background:#e7dfd1;">
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="batch-dialog">
+    <div class="modal">
+      <div class="head">
+        <div>
+          <h2>Carga en bonche</h2>
+          <p>Sube varias fotos y luego edítalas desde la grilla.</p>
+        </div>
+        <button class="close" type="button" data-close="batch-dialog">×</button>
+      </div>
+      <div class="content">
+        <form id="batch-form" method="post" action="/batch/save" enctype="multipart/form-data">
+          <label for="batch-fotos">Fotos</label>
+          <input id="batch-fotos" name="fotos" type="file" accept="image/*" multiple required>
+          <div id="batch-preview" class="preview-list"></div>
+          <div id="batch-fields"></div>
+          <label for="batch-comentarios">Comentarios comunes</label>
+          <textarea id="batch-comentarios" name="batch_comentarios"></textarea>
+          <div class="footer" style="padding-left:0;padding-right:0;">
+            <button class="btn primary" type="submit">Importar</button>
+            <button class="btn secondary" type="button" data-close="batch-dialog">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="field-dialog">
+    <div class="modal">
+      <div class="head">
+        <div>
+          <h2>Nuevo campo</h2>
+          <p>Este campo se agrega al JSON y a la base de datos.</p>
+        </div>
+        <button class="close" type="button" data-close="field-dialog">×</button>
+      </div>
+      <div class="content">
+        <form id="field-form" method="post" action="/field/new" enctype="multipart/form-data">
+          <label for="field-nombre">Nombre visible</label>
+          <input id="field-nombre" name="nombre" type="text" placeholder="Marca, Talla, Material" required>
+          <label for="field-etiqueta">Etiqueta</label>
+          <input id="field-etiqueta" name="etiqueta" type="text" placeholder="Marca" required>
+          <label for="field-tipo">Tipo</label>
+          <select id="field-tipo" name="tipo">
+            <option value="lista">Lista</option>
+            <option value="texto">Texto</option>
+          </select>
+          <label><input type="checkbox" name="requerido"> Requerido</label>
+          <label><input type="checkbox" name="sugerir_color"> Sugerir color</label>
+          <label for="field-opciones">Opciones iniciales</label>
+          <textarea id="field-opciones" name="opciones" placeholder="Separadas por coma"></textarea>
+          <div class="footer" style="padding-left:0;padding-right:0;">
+            <button class="btn primary" type="submit">Crear campo</button>
+            <button class="btn secondary" type="button" data-close="field-dialog">Cancelar</button>
+          </div>
+        </form>
+        <div class="section" style="margin-top:18px;">
+          <h2>Agregar opción a temporada</h2>
+          <p class="hint">Añade un valor extra a la lista <strong>temporada</strong> sin recrear el campo.</p>
+          <label for="season-option-input">Nueva opción</label>
+          <input id="season-option-input" type="text" placeholder="Ej. Playera">
+          <div class="footer" style="padding-left:0;padding-right:0;">
+            <button class="btn primary" type="button" id="add-season-option">Agregar a temporada</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="message-dialog">
+    <div class="modal">
+      <div class="head">
+        <div>
+          <h2 id="message-title">Mensaje</h2>
+          <p id="message-body">&nbsp;</p>
+        </div>
+        <button class="close" type="button" data-close="message-dialog">×</button>
+      </div>
+      <div class="footer">
+        <button class="btn primary" type="button" data-close="message-dialog">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    const state = { config: null, prendas: [], filters: {}, editId: null };
+    const $ = (sel) => document.querySelector(sel);
+    const escapeHtml = (value) => String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
+    function openDialog(id) {
+      const dialog = document.getElementById(id);
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function closeDialog(id) {
+      const dialog = document.getElementById(id);
+      if (dialog.open) dialog.close();
+    }
+
+    document.addEventListener('click', (event) => {
+      const close = event.target.closest('[data-close]');
+      if (close) closeDialog(close.dataset.close);
+    });
+
+    async function loadConfig() {
+      const response = await fetch('/api/config');
+      state.config = await response.json();
+      renderDynamicFilters();
+      renderFormFields('#garment-fields', state.config.campos, 'garment');
+      renderFormFields('#batch-fields', state.config.campos, 'batch');
+      await loadPrendas();
+    }
+
+    async function addSeasonOption() {
+      const input = $('#season-option-input');
+      const option = input.value.trim();
+      if (!option) return;
+      const body = new FormData();
+      body.append('campo', 'temporada');
+      body.append('opcion', option);
+      const response = await fetch('/field/option', { method: 'POST', body });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        alert(data.error || 'No se pudo agregar la opción.');
+        return;
+      }
+      input.value = '';
+      await loadConfig();
+      alert(`Se agregó "${option}" a temporada.`);
+    }
+
+    async function loadPrendas() {
+      const params = new URLSearchParams(state.filters);
+      const response = await fetch('/api/prendas?' + params.toString());
+      const data = await response.json();
+      state.prendas = data.prendas || [];
+      $('#count-pill').textContent = `${state.prendas.length} prendas`;
+      const grid = $('#card-grid');
+      grid.innerHTML = '';
+      if (!state.prendas.length) {
+        $('#empty-state').classList.remove('hidden');
+        return;
+      }
+      $('#empty-state').classList.add('hidden');
+      for (const prenda of state.prendas) grid.appendChild(renderCard(prenda));
+    }
+
+    function renderDynamicFilters() {
+      const container = $('#dynamic-filters');
+      container.innerHTML = '';
+      for (const campo of state.config.campos) {
+        const wrap = document.createElement('div');
+        const label = document.createElement('label');
+        const control = document.createElement(campo.tipo === 'lista' ? 'select' : 'input');
+        label.setAttribute('for', `filter-${campo.nombre}`);
+        label.textContent = campo.etiqueta;
+        control.id = `filter-${campo.nombre}`;
+        control.name = campo.nombre;
+        if (campo.tipo === 'lista') {
+          control.innerHTML = `<option value="">Todos</option>${(campo.opciones || []).map(op => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join('')}`;
+        } else {
+          control.type = 'text';
+          control.placeholder = campo.etiqueta;
+        }
+        wrap.appendChild(label);
+        wrap.appendChild(control);
+        container.appendChild(wrap);
+        control.addEventListener('change', applyFilters);
+        control.addEventListener('input', applyFilters);
+      }
+    }
+
+    function applyFilters(event) {
+      if (event) event.preventDefault();
+      const filters = {};
+      const q = $('#q').value.trim();
+      if (q) filters.q = q;
+      for (const campo of state.config.campos) {
+        const value = $(`#filter-${campo.nombre}`).value.trim();
+        if (value) filters[campo.nombre] = value;
+      }
+      state.filters = filters;
+      loadPrendas();
+    }
+
+    function renderFormFields(containerSelector, campos, prefix) {
+      const container = document.querySelector(containerSelector);
+      container.innerHTML = '';
+      for (const campo of campos) {
+        const block = document.createElement('div');
+        block.className = 'section';
+        const fieldId = `${prefix}-${campo.nombre}`;
+        const label = document.createElement('label');
+        label.setAttribute('for', fieldId);
+        label.textContent = `${campo.etiqueta}${campo.requerido ? ' *' : ''}`;
+        block.appendChild(label);
+        if (campo.tipo === 'lista') {
+          const select = document.createElement('select');
+          select.id = fieldId;
+          select.name = prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`;
+          select.innerHTML = `<option value="">--</option>${(campo.opciones || []).map(op => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join('')}`;
+          block.appendChild(select);
+        } else {
+          const input = document.createElement('input');
+          input.id = fieldId;
+          input.name = prefix === 'garment' ? `field_${campo.nombre}` : `batch_${campo.nombre}`;
+          input.type = 'text';
+          block.appendChild(input);
+        }
+        container.appendChild(block);
+      }
+    }
+
+    function renderCard(prenda) {
+      const article = document.createElement('article');
+      article.className = 'panel card';
+      const imgSrc = prenda.foto ? `/img/${encodeURIComponent(prenda.foto.split('/').pop())}` : '';
+      article.innerHTML = `
+        ${imgSrc ? `<img src="${imgSrc}" alt="${escapeHtml(prenda.identificador || 'Prenda')}">` : `<div class="ph"></div>`}
+        <div class="body">
+          <h3>${escapeHtml(prenda.identificador || 'Sin identificador')}</h3>
+          <div class="badges">${state.config.campos.map(campo => prenda[campo.nombre] ? `<span class="badge">${escapeHtml(campo.etiqueta)}: ${escapeHtml(prenda[campo.nombre])}</span>` : '').join('')}</div>
+          ${prenda.comentarios ? `<div class="muted" style="font-size:.9rem;">${escapeHtml(prenda.comentarios)}</div>` : ''}
+          <div class="tools">
+            <button class="btn secondary" type="button">Editar</button>
+            <button class="btn danger" type="button">Borrar</button>
+          </div>
+        </div>
+      `;
+      const [editBtn, deleteBtn] = article.querySelectorAll('button');
+      editBtn.addEventListener('click', () => openEditModal(prenda));
+      deleteBtn.addEventListener('click', () => deletePrenda(prenda));
+      return article;
+    }
+
+    async function openEditModal(prenda) {
+      state.editId = prenda.id;
+      $('#garment-title').textContent = 'Editar prenda';
+      $('#garment-subtitle').textContent = 'Modifica los campos o reemplaza la foto.';
+      $('#garment-record-id').value = prenda.id;
+      $('#garment-current-photo').value = prenda.foto || '';
+      $('#garment-identificador').value = prenda.identificador || '';
+      $('#garment-comentarios').value = prenda.comentarios || '';
+      $('#delete-garment').classList.remove('hidden');
+      for (const campo of state.config.campos) {
+        const el = document.querySelector(`#garment-${campo.nombre}`);
+        if (el) el.value = prenda[campo.nombre] || '';
+      }
+      $('#garment-preview').src = prenda.foto ? `/img/${encodeURIComponent(prenda.foto.split('/').pop())}` : '';
+      openDialog('garment-dialog');
+    }
+
+    function openCreateModal() {
+      state.editId = null;
+      $('#garment-title').textContent = 'Nueva prenda';
+      $('#garment-subtitle').textContent = 'Crea una prenda nueva desde el popup.';
+      $('#garment-form').reset();
+      $('#garment-record-id').value = '';
+      $('#garment-current-photo').value = '';
+      $('#garment-preview').removeAttribute('src');
+      $('#delete-garment').classList.add('hidden');
+      openDialog('garment-dialog');
+    }
+
+    function deletePrenda(prenda) {
+      if (!confirm(`¿Borrar definitivamente ${prenda.identificador || 'esta prenda'}?`)) return;
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.action = '/delete';
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'record_id';
+      input.value = prenda.id;
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    }
+
+    function wireModalPreviews() {
+      $('#garment-foto').addEventListener('change', () => {
+        const file = $('#garment-foto').files[0];
+        if (file) $('#garment-preview').src = URL.createObjectURL(file);
+      });
+      $('#batch-fotos').addEventListener('change', () => {
+        const container = $('#batch-preview');
+        container.innerHTML = '';
+        [...$('#batch-fotos').files].forEach(file => {
+          const item = document.createElement('div');
+          item.className = 'preview-item';
+          item.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="${escapeHtml(file.name)}"><div class="muted" style="font-size:.88rem;">${escapeHtml(file.name)}</div>`;
+          container.appendChild(item);
+        });
+      });
+    }
+
+    $('#filters-form').addEventListener('submit', applyFilters);
+    $('#clear-filters').addEventListener('click', () => {
+      $('#filters-form').reset();
+      state.filters = {};
+      loadPrendas();
+    });
+    $('#refresh-btn').addEventListener('click', loadPrendas);
+    $('#open-add').addEventListener('click', openCreateModal);
+    $('#open-batch').addEventListener('click', () => openDialog('batch-dialog'));
+    $('#open-field').addEventListener('click', () => openDialog('field-dialog'));
+    $('#add-season-option').addEventListener('click', addSeasonOption);
+    $('#delete-garment').addEventListener('click', () => {
+      const form = document.createElement('form');
+      form.method = 'post';
+      form.action = '/delete';
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'record_id';
+      input.value = $('#garment-record-id').value;
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    });
+
+    wireModalPreviews();
+
+    loadConfig();
+  </script>
+</body>
+</html>
