@@ -73,6 +73,7 @@ async function loadPrendas() {
   const data = await response.json();
   state.prendas = data.prendas || [];
   $('#count-pill').textContent = `${state.prendas.length} prendas`;
+  $('#count-pill-top').textContent = `${state.prendas.length} prendas`;
   const grid = $('#card-grid');
   grid.innerHTML = '';
   if (!state.prendas.length) {
@@ -550,6 +551,8 @@ function renderCard(prenda) {
       </div>
     </div>
   `;
+  const portada = article.querySelector('img, .ph');
+  if (portada) portada.addEventListener('click', () => openEditModal(prenda));   // con muchas columnas se edita tocando la foto
   const [editBtn, deleteBtn] = article.querySelectorAll('button');
   editBtn.addEventListener('click', () => openEditModal(prenda));
   deleteBtn.addEventListener('click', () => deletePrenda(prenda));
@@ -686,5 +689,54 @@ $('#garment-form').addEventListener('submit', () => {
   const qs = params.toString();
   $('#garment-return-query').value = qs ? '?' + qs : '';
 });
-loadConfig();
 
+// --- Cajón de filtros (celular) y botón flotante (+) ---
+const fabWrap = $('#fab-wrap');
+function setFab(open) {
+  fabWrap.classList.toggle('open', open);
+  $('#fab').setAttribute('aria-expanded', String(open));
+}
+function setSidebar(open) {
+  document.body.classList.toggle('sidebar-open', open);
+  $('#toggle-sidebar').setAttribute('aria-expanded', String(open));
+}
+$('#fab').addEventListener('click', () => setFab(!fabWrap.classList.contains('open')));
+$('#fab-scrim').addEventListener('click', () => setFab(false));
+fabWrap.querySelectorAll('.fab-item').forEach(btn => btn.addEventListener('click', () => setFab(false)));
+$('#toggle-sidebar').addEventListener('click', () => setSidebar(true));
+$('#close-sidebar').addEventListener('click', () => setSidebar(false));
+$('#sidebar-scrim').addEventListener('click', () => setSidebar(false));
+$('#filters-form').addEventListener('submit', () => setSidebar(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { setFab(false); setSidebar(false); }
+});
+
+// --- Columnas de la grilla (n x n): el tamaño de las fotos se ajusta solo ---
+const COLS_KEY = 'ropero.cols';
+const maxCols = () => (window.innerWidth <= 900 ? 6 : 10);
+function leerCols() {
+  try {
+    const v = parseInt(localStorage.getItem(COLS_KEY), 10);
+    if (v >= 1) return v;
+  } catch { /* sin almacenamiento */ }
+  return window.innerWidth <= 900 ? 2 : 5;
+}
+let cols = leerCols();
+function aplicarCols(n, guardar = false) {
+  cols = Math.min(Math.max(1, n), maxCols());
+  const grid = $('#card-grid');
+  grid.style.setProperty('--cols', cols);
+  grid.dataset.densidad = cols <= 3 ? 'completa' : cols <= 5 ? 'media' : 'minima';
+  $('#cols-value').textContent = cols;
+  $('#cols-menos').disabled = cols <= 1;
+  $('#cols-mas').disabled = cols >= maxCols();
+  if (guardar) {
+    try { localStorage.setItem(COLS_KEY, String(cols)); } catch { /* ignorar */ }
+  }
+}
+$('#cols-menos').addEventListener('click', () => aplicarCols(cols - 1, true));
+$('#cols-mas').addEventListener('click', () => aplicarCols(cols + 1, true));
+window.addEventListener('resize', () => aplicarCols(cols));
+aplicarCols(cols);
+
+loadConfig();

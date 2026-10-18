@@ -2,23 +2,37 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2eee6">
   <title>Ropero</title>
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="vista-fija">
+<body class="ropero-drawer">
   <div class="shell">
+    <!-- Barra superior (solo celular): abre el sidebar de filtros -->
+    <header class="topbar">
+      <button class="btn secondary" id="toggle-sidebar" type="button" aria-controls="sidebar" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        Filtros
+      </button>
+      <h1 class="topbar-title">Ropero</h1>
+      <div class="grid-ctl" role="group" aria-label="Fotos por fila">
+        <button type="button" id="cols-menos" aria-label="Menos columnas">&minus;</button>
+        <output id="cols-value" aria-live="polite">2</output>
+        <button type="button" id="cols-mas" aria-label="Más columnas">+</button>
+      </div>
+      <span class="pill" id="count-pill-top">0 prendas</span>
+    </header>
     <div class="main-layout">
       <!-- Columna Izquierda: Marca, Botones de acción y Filtros -->
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar" aria-label="Filtros">
         <header class="brand">
-          <h1>Ropero</h1>
-          <p>Interfaz separada del backend. Datos desde SQLite y filtros desde <span class="muted">campos.json</span>.</p>
-          <div class="actions">
-            <button class="btn primary" id="open-add">Añadir prenda</button>
-            <button class="btn secondary" id="open-batch">Cargar en bonche</button>
-            <button class="btn secondary" id="open-field">Nuevo campo</button>
-            <a class="btn secondary" href="/campos">Administrar campos</a>
+          <div class="brand-row">
+            <div>
+              <h1>Ropero</h1>
+              <p>Tu catálogo de prendas.</p>
+            </div>
+            <button class="icon-btn close-sidebar" id="close-sidebar" type="button" aria-label="Cerrar filtros">&times;</button>
           </div>
         </header>
 
@@ -41,6 +55,10 @@
             </form>
           </div>
         </section>
+      <div class="sidebar-links">
+          <button class="btn secondary" id="open-field" type="button">Nuevo campo</button>
+          <a class="btn secondary" href="/campos">Administrar campos</a>
+        </div>
       </aside>
 
       <!-- Columna Derecha (Principal): Visualización de las imágenes de las prendas -->
@@ -93,7 +111,7 @@
                 <h2>Vista previa</h2>
                 <p class="hint">La foto seleccionada o la actual se muestra aquí.</p>
               </div>
-              <img id="garment-preview" alt="Vista previa" style="width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:18px;background:#e7dfd1;">
+              <img id="garment-preview" class="preview-img" alt="Vista previa">
             </div>
           </div>
         </aside>
@@ -183,6 +201,20 @@
       </div>
     </div>
   </dialog>
+
+  <div class="sidebar-scrim" id="sidebar-scrim"></div>
+
+  <!-- Botón flotante (+): Añadir prenda / Cargar bonche -->
+  <div class="fab-wrap" id="fab-wrap">
+    <div class="fab-scrim" id="fab-scrim"></div>
+    <div class="fab-menu" id="fab-menu" role="menu">
+      <button class="fab-item" id="open-batch" type="button" role="menuitem">Cargar bonche</button>
+      <button class="fab-item" id="open-add" type="button" role="menuitem">Añadir prenda</button>
+    </div>
+    <button class="fab" id="fab" type="button" aria-label="Agregar" aria-haspopup="menu" aria-expanded="false" aria-controls="fab-menu">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
